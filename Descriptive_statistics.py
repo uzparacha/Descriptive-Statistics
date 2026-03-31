@@ -17,18 +17,21 @@ st.set_page_config(page_title="Descriptive Statistics Analyzer", page_icon="📊
 @st.cache_data
 def load_data(file):
     """Loads the uploaded dataset."""
-    name = file.name
-    if name.endswith('.csv'):
-        return pd.read_csv(file)
-    elif name.endswith('.xlsx') or name.endswith('.xls'):
-        return pd.read_excel(file)
-    else:
-        return None
+    try:
+        name = file.name
+        if name.endswith('.csv'):
+            return pd.read_csv(file)
+        elif name.endswith('.xlsx') or name.endswith('.xls'):
+            # Note: Requires 'openpyxl' installed
+            return pd.read_excel(file)
+    except Exception as e:
+        st.error(f"Error loading file: {e}")
+    return None
 
 # --- Main UI ---
 st.title("📊 Descriptive Statistics Analyzer")
 st.markdown("""
-Welcome to the Descriptive Stats Analyzer! Upload your dataset to instantly generate summary statistics, distribution plots, and correlation matrices. Ideal for quick Exploratory Data Analysis (EDA).
+Welcome to the Descriptive Stats Analyzer! Upload your dataset to instantly generate summary statistics, distribution plots, and correlation matrices.
 """)
 
 # --- Sidebar: File Upload ---
@@ -62,12 +65,14 @@ if uploaded_file is not None:
             st.dataframe(df.head(), use_container_width=True)
             
             st.subheader("Missing Values")
-            missing_data = pd.DataFrame({
-                'Missing Values': df.isnull().sum(),
-                'Percentage (%)': (df.isnull().sum() / len(df)) * 100
-            }).sort_values(by='Missing Values', ascending=False)
-            st.dataframe(missing_data[missing_data['Missing Values'] > 0], use_container_width=True)
-            if missing_data['Missing Values'].sum() == 0:
+            null_counts = df.isnull().sum()
+            if null_counts.sum() > 0:
+                missing_data = pd.DataFrame({
+                    'Missing Values': null_counts,
+                    'Percentage (%)': (null_counts / len(df)) * 100
+                }).sort_values(by='Missing Values', ascending=False)
+                st.dataframe(missing_data[missing_data['Missing Values'] > 0], use_container_width=True)
+            else:
                 st.success("No missing values found in the dataset!")
 
         # --- Tab 2: Summary Statistics ---
@@ -79,8 +84,8 @@ if uploaded_file is not None:
             
             if numeric_cols:
                 st.subheader("Numerical Data")
-                # Adding Skewness and Kurtosis to standard describe()
                 desc = df[numeric_cols].describe().T
+                # Adding Skewness and Kurtosis
                 desc['skewness'] = df[numeric_cols].skew()
                 desc['kurtosis'] = df[numeric_cols].kurt()
                 st.dataframe(desc, use_container_width=True)
@@ -95,16 +100,16 @@ if uploaded_file is not None:
             if numeric_cols:
                 selected_col = st.selectbox("Select a numerical column to visualize:", numeric_cols)
                 
-                col1, col2 = st.columns(2)
+                col_plot1, col_plot2 = st.columns(2)
                 
-                with col1:
+                with col_plot1:
                     st.subheader("Histogram & KDE")
                     fig, ax = plt.subplots(figsize=(8, 5))
                     sns.histplot(df[selected_col], kde=True, ax=ax, color='skyblue')
                     ax.set_title(f'Distribution of {selected_col}')
                     st.pyplot(fig)
                 
-                with col2:
+                with col_plot2:
                     st.subheader("Boxplot (Outlier Detection)")
                     fig, ax = plt.subplots(figsize=(8, 5))
                     sns.boxplot(x=df[selected_col], ax=ax, color='lightgreen')
@@ -117,12 +122,11 @@ if uploaded_file is not None:
         with tab4:
             st.header("Correlation Analysis")
             if len(numeric_cols) > 1:
-                st.markdown("This heatmap displays the Pearson correlation coefficients between numerical variables.")
+                st.markdown("Pearson correlation coefficients between numerical variables.")
                 
                 fig, ax = plt.subplots(figsize=(10, 8))
                 corr_matrix = df[numeric_cols].corr()
                 
-                # Plot heatmap
                 sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt=".2f", linewidths=0.5, ax=ax)
                 st.pyplot(fig)
             else:
@@ -131,5 +135,4 @@ if uploaded_file is not None:
     else:
         st.error("Error reading file. Please ensure it is a valid CSV or Excel file.")
 else:
-    # Instructions when no file is uploaded
     st.info("👈 Please upload a dataset from the sidebar to begin analysis.")
